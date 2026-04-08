@@ -39,6 +39,9 @@ This is grad student descent as a service — the agent proposes hypotheses, run
 - Feedback loop > 30 minutes per experiment (statistical advantage collapses)
 - Production systems without isolation
 - Multi-variable changes per experiment
+- Irreversible side effects (sending emails, placing orders, real spend, prod writes)
+- Feedback latency > 30 min without a usable proxy metric
+- Non-discrete or non-scriptable search spaces (physical experiments, human studies)
 
 ---
 
@@ -66,9 +69,11 @@ experiments.jsonl  ← auto-generated history
 - **Budget**: 300  # seconds per experiment, non-negotiable
 
 ## Metric Integrity Check
-<!-- Agent MUST answer this before starting the loop -->
-- How could an agent game this metric without actually improving the target? [answer]
-- If the answer is not "it can't" — redesign the metric before proceeding.
+<!-- Agent MUST answer all three before starting the loop. Any "yes/unsafe" → redesign Verify. -->
+
+1. **Decoupling test**: Can you name a concrete change that would improve Verify's number while visibly NOT improving the true goal? If yes → metric is gameable.
+2. **Determinism test**: Does Verify depend on randomness, wall-clock time, network, or external state? If yes → fix seed, pin versions, isolate env, or add median-of-N.
+3. **Degenerate-input test**: If the target file is emptied / commented out / replaced with a stub, does Verify still produce a legal number? If yes → is that number *worse* than baseline? If not → Verify rewards destruction. Redesign.
 
 ## Current State
 - Baseline: [X] (measured, not assumed — run Measure command and record it)
@@ -94,6 +99,28 @@ experiments.jsonl  ← auto-generated history
 |----|-----------|--------|-------|
 | 0  | baseline  | —      | ✓     |
 ```
+
+---
+
+## Hypothesis Heuristics
+
+Turn "what to try next" from art into a finite state machine. Each proposed hypothesis MUST be tagged with one of four buckets:
+
+| Bucket | Meaning | When to use |
+|--------|---------|-------------|
+| `tune` | Adjust existing param ±20% or toggle single flag | Default — exploit the neighborhood of current best |
+| `ablate` | Remove / simplify / disable something | Before adding — smallest change that might reveal dead weight |
+| `swap` | Replace one component with a known alternative | When tune + ablate have been exercised |
+| `novel` | Qualitatively different approach (new algorithm, new abstraction) | After 5 consecutive discards OR 3 same-bucket retries |
+
+**Rules:**
+1. **Exploit first**: default to `tune` against the current best
+2. **Ablate before add**: prefer removing over adding when both are plausible
+3. **Copy before invent**: before `novel`, search git log, community forks, arxiv for existing solutions
+4. **Rotation rule**: 3 consecutive hypotheses in the same bucket → force-switch to a different bucket
+5. **Log the bucket**: record `bucket` field in experiments.jsonl alongside `hypothesis`
+
+This replaces "agent randomly tries things" with a bounded exploration policy.
 
 ---
 
@@ -174,6 +201,7 @@ Write key insights to **Cross-Session Learnings** before closing.
   "id": 1,
   "timestamp": "2026-04-09T10:00:00",
   "hypothesis": "reduce batch size from 64 to 32",
+  "bucket": "tune",
   "value": 142.3,
   "baseline": 180.0,
   "kept": true,
@@ -275,6 +303,12 @@ def run(exp_config: dict) -> dict:
 | SQL query | `queries/report.sql` | `psql $DB -c "EXPLAIN (ANALYZE,FORMAT JSON) $(cat queries/report.sql)" \| python parse_ms.py` |
 | Rust benchmark | `src/solver.rs` | `cargo bench 2>&1 \| grep test_solve \| awk '{print $5}'` |
 | API latency | `src/handler.rs` | `wrk -t4 -c100 -d10s http://localhost:8080/api \| grep Latency \| awk '{print $2}'` |
+| LLM agent system prompt | `prompts/agent_system.txt` | `python run_eval.py --suite swe_bench_lite \| grep pass_rate \| awk '{print $NF}'` |
+| Agentic RL reward shaping | `envs/reward.py` | `python rollout.py --n 64 --seed 0 \| grep mean_return \| awk '{print $NF}'` |
+| Agent memory retrieval | `memory/retriever.py` | `python eval_recall.py --k 10 \| grep recall@10 \| awk '{print $NF}'` |
+| Trading strategy params | `strategies/momentum.yaml` | `python backtest.py --years 5 \| grep sharpe \| awk '{print $NF}'` |
+| Cold outbound email | `emails/outreach.md` | `python crm_stats.py --campaign q2 \| grep reply_rate \| awk '{print $NF}'` |
+| Blog post hook | `posts/draft.md` | `python llm_judge.py --rubric engagement --model gpt-5 \| grep score \| awk '{print $NF}'` |
 
 ---
 
