@@ -121,5 +121,5 @@ Human-provided `Modify` and `Measure` are always preferred. If missing, the agen
 
 ## References
 
-- **autoresearch-anything** (this repo) — Claude Code skill: [`my-autoresearch`](https://github.com/jianghao-zhang/autoresearch-anything)
+- **autoresearch-anything** (this repo) — Claude Code skill: [`autoresearch-anything`](https://github.com/jianghao-zhang/autoresearch-anything)
 - **Karpathy's original autoresearch** (upstream) — canonical ML implementation, val_bpb metric, 5-minute budget: [karpathy/autoresearch](https://github.com/karpathy/autoresearch)
